@@ -1,0 +1,20 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="..\FrameXML\UI.xsd">
+	<Frame name="EliteTargetFrame_Overlay" parent="TargetFrame" parentKey="ETF" setAllPoints="true">
+		<Layers>
+			<Layer level="BACKGROUND" textureSubLevel="3">
+				<Texture parentKey="Frame" hidden="true">
+					<Anchors>
+						<Anchor point="LEFT" relativeKey="$parent.$parent.TargetFrameContainer.FrameTexture" relativePoint="LEFT"/>
+					</Anchors>
+				</Texture>
+			</Layer>
+			<Layer level="ARTWORK" textureSubLevel="3">
+				<Texture parentKey="Portrait" hidden="true">
+					<Anchors>
+						<Anchor point="LEFT" relativeKey="$parent.$parent.TargetFrameContainer.Portrait" relativePoint="LEFT"/>
+					</Anchors>
+				</Texture>
+			</Layer>
+		</Layers>
+	</Frame>
+</Ui>
