@@ -56,6 +56,117 @@ local function setTargetSetting(setting, value)
     return false
 end
 
+--[[
+ * Tooltips in Esc -> AddOns use SettingsTooltip, not GameTooltip (see DefaultTooltipMixin).
+--]]
+local function bindOptionTooltip(targets, titleText, descText, anchorFrame)
+    if not titleText then
+        return
+    end
+
+    local targetList = type(targets) == "table" and targets or { targets }
+    local tooltipAnchor = anchorFrame or targetList[1]
+
+    local function populateTooltip()
+        local settingsTooltip = _G.SettingsTooltip
+        if Settings and Settings.InitTooltip and settingsTooltip then
+            if GameTooltip_ClearLines then
+                GameTooltip_ClearLines(settingsTooltip)
+            end
+            Settings.InitTooltip(titleText, descText)
+            return
+        end
+
+        local tooltip = GameTooltip
+        if not tooltip then
+            return
+        end
+        tooltip:SetOwner(targetList[1], "ANCHOR_RIGHT")
+        if GameTooltip_ClearLines then
+            GameTooltip_ClearLines(tooltip)
+        end
+        if GameTooltip_SetTitle then
+            GameTooltip_SetTitle(tooltip, titleText)
+        else
+            tooltip:SetText(titleText, 1, 1, 1)
+        end
+        if descText and descText ~= "" then
+            if GameTooltip_AddNormalLine then
+                GameTooltip_AddNormalLine(tooltip, descText, true)
+            else
+                tooltip:AddLine(descText, 1, 0.82, 0, true)
+            end
+        end
+        tooltip:Show()
+    end
+
+    if DefaultTooltipMixin and Settings and Settings.InitTooltip and _G.SettingsTooltip then
+        for _, frame in ipairs(targetList) do
+            if frame then
+                Mixin(frame, DefaultTooltipMixin)
+                DefaultTooltipMixin.OnLoad(frame)
+                frame:SetTooltipFunc(populateTooltip)
+                if frame ~= tooltipAnchor and frame.SetCustomTooltipAnchoring then
+                    frame:SetCustomTooltipAnchoring(tooltipAnchor, "ANCHOR_RIGHT", -10, 0)
+                end
+            end
+        end
+        return
+    end
+
+    local function showTooltip(self)
+        populateTooltip()
+        local settingsTooltip = _G.SettingsTooltip
+        if settingsTooltip and settingsTooltip.SetOwner then
+            settingsTooltip:SetOwner(tooltipAnchor, "ANCHOR_RIGHT", -10, 0)
+            settingsTooltip:Show()
+        end
+    end
+
+    local function hideTooltip()
+        local settingsTooltip = _G.SettingsTooltip
+        if settingsTooltip then
+            settingsTooltip:Hide()
+        elseif GameTooltip then
+            GameTooltip:Hide()
+        end
+    end
+
+    for _, frame in ipairs(targetList) do
+        if frame then
+            frame:EnableMouse(true)
+            frame:SetScript("OnEnter", showTooltip)
+            frame:SetScript("OnLeave", hideTooltip)
+        end
+    end
+end
+
+local ROW_HEIGHT = 26
+local ROW_WIDTH = 300
+
+local function createCheckboxRow(parent, anchor, yOffset, labelText)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetSize(ROW_WIDTH, ROW_HEIGHT)
+    row:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, yOffset)
+
+    local check = CreateFrame("CheckButton", nil, row, "InterfaceOptionsCheckButtonTemplate")
+    check:SetPoint("LEFT", row, "LEFT", 0, 0)
+
+    local label = row:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    label:SetPoint("LEFT", check, "RIGHT", 4, 0)
+    label:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+    label:SetJustifyH("LEFT")
+    label:SetText(labelText)
+
+    -- Narrow hit area over the label; tooltip anchors to the checkbox (not the wide row).
+    local labelHit = CreateFrame("Frame", nil, row)
+    labelHit:SetPoint("TOPLEFT", check, "TOPRIGHT", 0, 0)
+    labelHit:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -4, 0)
+    labelHit:EnableMouse(true)
+
+    return row, check, labelHit
+end
+
 local CONTAINER_BACKDROP = {
     bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
     edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -89,28 +200,17 @@ local sectionMain = group1:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 sectionMain:SetPoint("TOPLEFT", SECTION_PADDING, -SECTION_PADDING)
 sectionMain:SetText(L.SectionTarget or "Target frame")
 
-local ROW_SPACING = 8
+local ROW_SPACING = -2
 
-local checkDisplay = CreateFrame("CheckButton", nil, group1, "InterfaceOptionsCheckButtonTemplate")
-checkDisplay:SetPoint("TOPLEFT", sectionMain, "BOTTOMLEFT", 0, -6)
-local checkDisplayLabel = checkDisplay:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-checkDisplayLabel:SetPoint("LEFT", checkDisplay, "RIGHT", 4, 0)
-checkDisplayLabel:SetText(L.Display or "Display")
-checkDisplay.tooltipText = L.DisplayDesc or "Show or hide target frame skin mirroring."
+local rowDisplay, checkDisplay, labelHitDisplay = createCheckboxRow(group1, sectionMain, -6, L.Display or "Display")
+local rowSync, checkSync, labelHitSync = createCheckboxRow(group1, rowDisplay, ROW_SPACING, L.SyncFrameMode or "Sync with player frame")
+local rowHideInInstance, checkHideInInstance, labelHitHideInInstance = createCheckboxRow(group1, rowSync, ROW_SPACING, L.HideInInstance or "Display in instances")
+local rowPlayersOnly, checkPlayersOnly, labelHitPlayersOnly = createCheckboxRow(group1, rowHideInInstance, ROW_SPACING, L.PlayersOnly or "Players only")
 
-local checkSync = CreateFrame("CheckButton", nil, group1, "InterfaceOptionsCheckButtonTemplate")
-checkSync:SetPoint("TOPLEFT", checkDisplay, "BOTTOMLEFT", 0, -ROW_SPACING)
-local checkSyncLabel = checkSync:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-checkSyncLabel:SetPoint("LEFT", checkSync, "RIGHT", 4, 0)
-checkSyncLabel:SetText(L.SyncFrameMode or "Sync with player frame")
-checkSync.tooltipText = L.SyncFrameModeDesc or "Use the same texture mode as the player frame."
-
-local checkHideInInstance = CreateFrame("CheckButton", nil, group1, "InterfaceOptionsCheckButtonTemplate")
-checkHideInInstance:SetPoint("TOPLEFT", checkSync, "BOTTOMLEFT", 0, -ROW_SPACING)
-local checkHideInInstanceLabel = checkHideInInstance:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-checkHideInInstanceLabel:SetPoint("LEFT", checkHideInInstance, "RIGHT", 4, 0)
-checkHideInInstanceLabel:SetText(L.HideInInstance or "Display in instances")
-checkHideInInstance.tooltipText = L.HideInInstanceDesc or "Apply target skins in instances, raids, battlegrounds and arenas."
+bindOptionTooltip({ checkDisplay, labelHitDisplay }, L.Display or "Display", L.DisplayDesc, checkDisplay)
+bindOptionTooltip({ checkSync, labelHitSync }, L.SyncFrameMode or "Sync with player frame", L.SyncFrameModeDesc, checkSync)
+bindOptionTooltip({ checkHideInInstance, labelHitHideInInstance }, L.HideInInstance or "Display in instances", L.HideInInstanceDesc, checkHideInInstance)
+bindOptionTooltip({ checkPlayersOnly, labelHitPlayersOnly }, L.PlayersOnly or "Players only", L.PlayersOnlyDesc, checkPlayersOnly)
 
 local function setCheckFromSetting(btn, value)
     local checked = (value == true or value == 1)
@@ -126,6 +226,7 @@ local function refreshTargetChecks()
         setCheckFromSetting(checkDisplay, targetSettings.display)
         setCheckFromSetting(checkSync, targetSettings.syncFrameMode)
         setCheckFromSetting(checkHideInInstance, targetSettings.instances)
+        setCheckFromSetting(checkPlayersOnly, targetSettings.playerTargetsOnly)
     end
 end
 
@@ -133,11 +234,13 @@ local btnReset = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
 btnReset:SetSize(100, 22)
 btnReset:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -24, -16)
 btnReset:SetText(L.Reset or "Reset")
+bindOptionTooltip({ btnReset }, L.Reset or "Reset", L.ResetDesc)
 btnReset:SetScript("OnClick", function()
     setTargetSetting("display", true)
     setTargetSetting("syncFrameMode", false)
     setTargetSetting("frameMode", 1)
     setTargetSetting("instances", true)
+    setTargetSetting("playerTargetsOnly", true)
     if C_Timer and C_Timer.After then
         C_Timer.After(0, function()
             refreshTargetChecks()
@@ -155,6 +258,10 @@ checkSync:SetScript("OnClick", function(self)
 end)
 checkHideInInstance:SetScript("OnClick", function(self)
     setTargetSetting("instances", self:GetChecked() and true or false)
+end)
+checkPlayersOnly:SetScript("OnClick", function(self)
+    setTargetSetting("playerTargetsOnly", self:GetChecked() and true or false)
+    requestTargetUpdate()
 end)
 
 local group3 = CreateFrame("Frame", nil, panel, BackdropTemplate)
@@ -331,6 +438,7 @@ panel:SetScript("OnShow", function()
     checkDisplayLabel:SetText(L.Display or "Display")
     checkSyncLabel:SetText(L.SyncFrameMode or "Sync with player frame")
     checkHideInInstanceLabel:SetText(L.HideInInstance or "Display in instances")
+    checkPlayersOnlyLabel:SetText(L.PlayersOnly or "Players only")
     listLabel:SetText(L.SectionTextures or "Available textures")
     refreshTargetChecks()
     updateFrameModeList()

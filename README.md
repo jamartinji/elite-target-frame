@@ -1,6 +1,6 @@
 # Elite Target Frame
 
-[![Version](https://img.shields.io/badge/Version-1.0.1-informational)](EliteTargetFrame.toc)
+[![Version](https://img.shields.io/badge/Version-1.0.2-informational)](EliteTargetFrame.toc)
 [![WoW](https://img.shields.io/badge/WoW-12.0.5%20(MD)-orange)](https://worldofwarcraft.blizzard.com/)
 [![Lua](https://img.shields.io/badge/Lua-5.x-blue)](https://www.lua.org/)
 
@@ -33,6 +33,7 @@ Companion add-on for **[Elite Player Frame (Enhanced)](https://www.curseforge.co
 | **Display** | Show or hide target frame skins. |
 | **Sync with player frame** | Use the same texture mode as your player frame (overrides manual/auto target choice). |
 | **Display in instances** | Apply target skins in dungeons, raids, battlegrounds, and arenas. |
+| **Players only** | Apply skins only when the target is another player (default: on). NPCs keep the normal target frame. |
 | **Available textures** | Searchable list of all EPF frame modes; click a row to set the target frame texture. Choosing **Automatic** disables sync. |
 
 ---

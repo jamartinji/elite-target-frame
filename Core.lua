@@ -18,6 +18,7 @@ local SETTINGS_DEFAULTS = {
     syncFrameMode = false,
     frameMode = 1,
     instances = true,
+    playerTargetsOnly = true,
     layerOffsets = {
         Frame = { x = 0, y = 0 },
         Portrait = { x = 0, y = 0 },
@@ -617,9 +618,19 @@ local function resolveTargetAutoTexture(base)
     return resolveTargetLevelFallbackTexture(base, targetInfo)
 end
 
+local function shouldApplyToCurrentTarget()
+    ensureSettings()
+    if settings.playerTargetsOnly then
+        if not UnitExists("target") or not UnitIsPlayer("target") then
+            return false
+        end
+    end
+    return true
+end
+
 local function getActiveTexture(base)
     ensureSettings()
-    if not settings.display or (not settings.instances and IsInInstance()) then
+    if not settings.display or not shouldApplyToCurrentTarget() or (not settings.instances and IsInInstance()) then
         return base:GetTexture(0)
     end
     if settings.syncFrameMode and type(base.GetCurrentTexture) == "function" then
@@ -658,7 +669,7 @@ local function updateTargetTexture()
     local overlay = ensureOverlay()
     if not overlay then return false end
 
-    if not settings.display then
+    if not settings.display or not shouldApplyToCurrentTarget() then
         hideTargetOverlays()
         return true
     end
