@@ -408,6 +408,90 @@ local function targetMatchesSex(base, targetInfo, value)
     return wantId ~= nil and targetInfo.sex == wantId
 end
 
+local CRITERIA_ANY = ""
+
+local RACE_FILE_ALIASES = {
+    Earthen = "EarthenDwarf",
+    Haranir = "Harronir",
+}
+
+local function normalizeRaceKey(race)
+    if not race then return nil end
+    return tostring(race):upper():gsub(" ", "")
+end
+
+local function targetRaceMatchesStoredCriteria(target_race_id, stored_race)
+    if not stored_race or stored_race == CRITERIA_ANY then
+        return true
+    end
+    if not target_race_id then
+        return false
+    end
+    local numeric = tonumber(stored_race)
+    if numeric then
+        return target_race_id == numeric
+    end
+    if not C_CreatureInfo or not C_CreatureInfo.GetRaceInfo then
+        return false
+    end
+    local ok, target_info = pcall(C_CreatureInfo.GetRaceInfo, target_race_id)
+    if not ok or not target_info or not target_info.clientFileString then
+        return false
+    end
+    local stored = RACE_FILE_ALIASES[stored_race] or stored_race
+    local target_key = normalizeRaceKey(target_info.clientFileString)
+    return target_key == normalizeRaceKey(stored) or target_key == normalizeRaceKey(stored_race)
+end
+
+--[[
+ * Match EPF Custom Skins override rows against target unit info (no call into Custom Skins code).
+ * Uses mode_to_override on the global table when that addon has registered modes.
+--]]
+local function overrideCriteriaMatchesTarget(base, targetInfo, override)
+    if not override or override.enabled == false or not override.catalogId then
+        return false
+    end
+    if override.class and override.class ~= CRITERIA_ANY and not targetMatchesClass(base, targetInfo, override.class) then
+        return false
+    end
+    if override.spec and override.spec ~= CRITERIA_ANY then
+        local spec_id = tonumber(override.spec) or override.spec
+        if not targetInfo.specialization or targetInfo.specialization ~= spec_id then
+            return false
+        end
+    end
+    if override.race and override.race ~= CRITERIA_ANY and not targetRaceMatchesStoredCriteria(targetInfo.race, override.race) then
+        return false
+    end
+    if override.faction and override.faction ~= CRITERIA_ANY and not targetMatchesFaction(targetInfo, override.faction) then
+        return false
+    end
+    if override.sex and override.sex ~= CRITERIA_ANY and not targetMatchesSex(base, targetInfo, override.sex) then
+        return false
+    end
+    return true
+end
+
+local function getRegisteredOverrideForMode(modeId)
+    local module_table = _G.EPF_CustomSkins_Overrides
+    if not module_table or type(module_table.mode_to_override) ~= "table" then
+        return nil
+    end
+    return module_table.mode_to_override[modeId]
+end
+
+local function isRegisteredOverrideModeId(modeId)
+    return getRegisteredOverrideForMode(modeId) ~= nil
+end
+
+local function targetMatchesOverrideMode(base, targetInfo, modeId)
+    local override = getRegisteredOverrideForMode(modeId)
+    if not override then
+        return false
+    end
+    return overrideCriteriaMatchesTarget(base, targetInfo, override)
+end
+
 local function entryMatchesTarget(base, targetInfo, entry)
     if not entry or entry.class == "CUSTOM" then
         return false
@@ -585,6 +669,9 @@ local function resolveTargetAutoTexture(base)
             if entry and entryMatchesTarget(base, targetInfo, entry) then
                 return base:GetTexture(modeId)
             end
+            if targetMatchesOverrideMode(base, targetInfo, modeId) then
+                return base:GetTexture(modeId)
+            end
         end
     end
 
@@ -595,7 +682,9 @@ local function resolveTargetAutoTexture(base)
             return nil
         end
         for _, modeId in ipairs(order) do
-            if not skinCriteriaByModeId[modeId] then
+            if skinCriteriaByModeId[modeId] or isRegisteredOverrideModeId(modeId) then
+                -- Handled above (definition entries and target-based overrides).
+            else
                 local textureData = base:GetTexture(modeId)
                 if textureData and type(textureData.autoCondition) == "function" then
                     if textureData.autoCondition(base) then
