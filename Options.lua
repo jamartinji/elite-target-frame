@@ -164,7 +164,7 @@ local function createCheckboxRow(parent, anchor, yOffset, labelText)
     labelHit:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -4, 0)
     labelHit:EnableMouse(true)
 
-    return row, check, labelHit
+    return row, check, labelHit, label
 end
 
 local CONTAINER_BACKDROP = {
@@ -202,10 +202,10 @@ sectionMain:SetText(L.SectionTarget or "Target frame")
 
 local ROW_SPACING = -2
 
-local rowDisplay, checkDisplay, labelHitDisplay = createCheckboxRow(group1, sectionMain, -6, L.Display or "Display")
-local rowSync, checkSync, labelHitSync = createCheckboxRow(group1, rowDisplay, ROW_SPACING, L.SyncFrameMode or "Sync with player frame")
-local rowHideInInstance, checkHideInInstance, labelHitHideInInstance = createCheckboxRow(group1, rowSync, ROW_SPACING, L.HideInInstance or "Display in instances")
-local rowPlayersOnly, checkPlayersOnly, labelHitPlayersOnly = createCheckboxRow(group1, rowHideInInstance, ROW_SPACING, L.PlayersOnly or "Players only")
+local rowDisplay, checkDisplay, labelHitDisplay, checkDisplayLabel = createCheckboxRow(group1, sectionMain, -6, L.Display or "Display")
+local rowSync, checkSync, labelHitSync, checkSyncLabel = createCheckboxRow(group1, rowDisplay, ROW_SPACING, L.SyncFrameMode or "Sync with player frame")
+local rowHideInInstance, checkHideInInstance, labelHitHideInInstance, checkHideInInstanceLabel = createCheckboxRow(group1, rowSync, ROW_SPACING, L.HideInInstance or "Display in instances")
+local rowPlayersOnly, checkPlayersOnly, labelHitPlayersOnly, checkPlayersOnlyLabel = createCheckboxRow(group1, rowHideInInstance, ROW_SPACING, L.PlayersOnly or "Players only")
 
 bindOptionTooltip({ checkDisplay, labelHitDisplay }, L.Display or "Display", L.DisplayDesc, checkDisplay)
 bindOptionTooltip({ checkSync, labelHitSync }, L.SyncFrameMode or "Sync with player frame", L.SyncFrameModeDesc, checkSync)
