@@ -4,7 +4,14 @@ All notable changes to **Elite Target Frame** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.3] - 2026-05-22
+## [1.0.4] - 2026-05-25
+
+### Fixed
+
+- **Automatic** mode no longer applies EPF Custom Skins **override** textures to the target using the **player** character; overrides now match the **target** unit unless **Sync with player frame** is enabled.
+- Override matching on the target uses inline criteria checks (optional read of `mode_to_override` when Custom Skins is loaded); **no dependency** on the Custom Skins addon in the TOC.
+
+## [1.0.3] - 2026-06-01
 
 ### Fixed
 
