@@ -1,6 +1,6 @@
 # Elite Target Frame
 
-[![Version](https://img.shields.io/badge/Version-1.0.2-informational)](EliteTargetFrame.toc)
+[![Version](https://img.shields.io/badge/Version-1.0.3-informational)](EliteTargetFrame.toc)
 [![WoW](https://img.shields.io/badge/WoW-12.0.5%20(MD)-orange)](https://worldofwarcraft.blizzard.com/)
 [![Lua](https://img.shields.io/badge/Lua-5.x-blue)](https://www.lua.org/)
 
