@@ -1,4 +1,4 @@
-## Interface: 120000, 120001, 120005, 120007
+## Interface: 120007, 120100
 ## Title: Elite Target Frame
 ## Notes: Applies Elite Player Frame (Enhanced) skins to the target unit frame with horizontal mirroring and adjustable X offset.
 ## Notes-deDE: Wendet Elite Player Frame (Enhanced)-Skins auf das Zielrahmen mit horizontaler Spiegelung und einstellbarem X-Versatz an.
@@ -11,7 +11,7 @@
 ## Notes-ruRU: Применяет скины Elite Player Frame (Enhanced) к рамке цели с горизонтальным отражением и настраиваемым смещением по X.
 ## Notes-zhCN: 将 Elite Player Frame (Enhanced) 皮肤应用到目标框体，支持水平翻转与 X 偏移调整。
 ## Notes-zhTW: 將 Elite Player Frame (Enhanced) 皮膚套用到目標框架，支援水平翻轉與 X 偏移調整。
-## Version: 1.0.5
+## Version: 1.0.6
 ## IconTexture: Interface\AddOns\EliteTargetFrame\assets\etf-icon.png
 ## Author: Drakeinhart
 ## Dependencies: ElitePlayerFrame_Enhanced
