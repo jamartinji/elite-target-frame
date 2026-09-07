@@ -925,7 +925,10 @@ bootstrap:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "PLAYER_TARGET_CHANGED" then
         onTargetContextChanged()
     elseif event == "INSPECT_READY" then
-        if UnitExists("target") and (not arg1 or UnitGUID("target") == arg1) then
+        -- Do not compare UnitGUID("target") == arg1: GUIDs can be secret values in
+        -- arenas/BGs/M+/raids and comparing them taints and errors. UnitIsUnit() also
+        -- cannot take a GUID. Refresh when a target exists; inspect is infrequent.
+        if UnitExists("target") then
             requestUpdate()
         end
     elseif event == "UNIT_LEVEL" then
