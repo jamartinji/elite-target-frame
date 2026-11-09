@@ -4,6 +4,19 @@ All notable changes to **Elite Target Frame** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-11-09
+
+### Changed
+
+- Requires Elite Player Frame (Enhanced) 1.11.0+ (string `frameMode` / `FRAME_MODES` ids).
+- Interface tags updated for WoW 12.1.5 / 12.1.7.
+- Target skin resolution uses string texture keys (`GetTextures` / Custom Skins core capture); migrates legacy numeric `frameMode` SavedVariables.
+
+### Fixed
+
+- Skin selection list and auto/manual target textures work again with EPF 1.11.
+- Skin list paints on first open in the Settings canvas (`ScrollBox` `FullUpdate` after real layout size).
+
 ## [1.0.7] - 2026-09-07
 
 ### Fixed
