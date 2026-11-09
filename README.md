@@ -1,7 +1,7 @@
 # Elite Target Frame
 
-[![Version](https://img.shields.io/badge/Version-1.0.7-informational)](EliteTargetFrame.toc)
-[![WoW](https://img.shields.io/badge/WoW-12.1.0%20(Midnight)-orange)](https://worldofwarcraft.blizzard.com/)
+[![Version](https://img.shields.io/badge/Version-1.1.0-informational)](EliteTargetFrame.toc)
+[![WoW](https://img.shields.io/badge/WoW-12.1.7%20(Midnight)-orange)](https://worldofwarcraft.blizzard.com/)
 [![Lua](https://img.shields.io/badge/Lua-5.x-blue)](https://www.lua.org/)
 
 Companion add-on for **[Elite Player Frame (Enhanced)](https://www.curseforge.com/wow/addons/elite-player-frame-enhanced)** that applies the same frame skins to your **target** unit frame, mirrored for the target layout.
@@ -10,7 +10,7 @@ Companion add-on for **[Elite Player Frame (Enhanced)](https://www.curseforge.co
 
 ## Requirements
 
-- **Elite Player Frame (Enhanced)** v1.10.3 or newer (enabled).
+- **Elite Player Frame (Enhanced)** v1.11.0 or newer (enabled).
 - Optional: **EPF Custom Skins** — extra textures are picked up automatically when that add-on is installed; Elite Target Frame does not depend on it at load time.
 
 ---

@@ -13,10 +13,20 @@ local SV_NAME = "EliteTargetFrame_Settings"
 local MAX_LEVEL_TEXTURE_ID = 5
 local INTRO_MAX_LEVEL = 10
 
+-- EPF 1.11+ uses string frameMode ids; keep a map for SavedVariables from older ETF builds.
+local LEGACY_NUMERIC_FRAME_MODE = {
+    [0] = "normal",
+    [1] = "auto",
+    [2] = "silver",
+    [3] = "silver-winged",
+    [4] = "gold",
+    [5] = "gold-winged",
+}
+
 local SETTINGS_DEFAULTS = {
     display = true,
     syncFrameMode = false,
-    frameMode = 1,
+    frameMode = "auto",
     instances = true,
     playerTargetsOnly = true,
     layerOffsets = {
@@ -55,8 +65,86 @@ local function ensureSettings()
             end
         end
     end
+    if type(sv.frameMode) == "number" then
+        sv.frameMode = LEGACY_NUMERIC_FRAME_MODE[sv.frameMode] or "auto"
+    end
     settings = sv
     return settings
+end
+
+local function usesStringModeIds(base)
+    return base and type(base.GetFrameModesIndex) == "function"
+end
+
+--[[
+ * EPF 1.11+ keys TEXTURES by string id; public GetTexture() still only accepts numbers.
+ * Prefer Custom Skins' live core capture when available; otherwise GetTextures() copy
+ * (deep copy keeps autoCondition function refs and atlas tables usable for painting).
+--]]
+local cached_textures
+local cached_textures_base
+
+local function getEpfTextures(base)
+    if not base then
+        return nil
+    end
+    local overrides = _G.EPF_CustomSkins_Overrides
+    if overrides and type(overrides.GetEpfCore) == "function" then
+        local core = overrides.GetEpfCore()
+        if core and type(core.TEXTURES) == "table" then
+            return core.TEXTURES
+        end
+    end
+    if cached_textures and cached_textures_base == base then
+        return cached_textures
+    end
+    if type(base.GetTextures) == "function" then
+        local ok, textures = pcall(function() return base:GetTextures() end)
+        if ok and type(textures) == "table" then
+            cached_textures = textures
+            cached_textures_base = base
+            return textures
+        end
+    end
+    if type(base.GetCore) == "function" then
+        local ok, core = pcall(function() return base:GetCore() end)
+        if ok and type(core) == "table" and type(core.TEXTURES) == "table" then
+            return core.TEXTURES
+        end
+    end
+    return nil
+end
+
+local function getEpfTexture(base, mode_id)
+    if not base or mode_id == nil then
+        return nil
+    end
+    local textures = getEpfTextures(base)
+    if textures and textures[mode_id] then
+        return textures[mode_id]
+    end
+    if type(base.GetTexture) == "function" then
+        local ok, texture = pcall(function() return base:GetTexture(mode_id) end)
+        if ok and texture then
+            return texture
+        end
+    end
+    return nil
+end
+
+local function invalidateEpfTextureCache()
+    cached_textures = nil
+    cached_textures_base = nil
+end
+
+local function resolveFrameModeId(mode_id)
+    if type(mode_id) == "number" then
+        return LEGACY_NUMERIC_FRAME_MODE[mode_id] or "auto"
+    end
+    if mode_id == nil or mode_id == "" then
+        return "auto"
+    end
+    return mode_id
 end
 
 local function ensureLayerOffsets()
@@ -549,17 +637,45 @@ end
 
 local function collectCustomSkinsModeIdsByRegistration(base)
     local ids = {}
-    local frameModes = base.FRAME_MODES
-    if type(frameModes) ~= "table" then
+
+    -- Prefer Custom Skins runtime maps (stable catalog id → EPF mode id).
+    local overrides = _G.EPF_CustomSkins_Overrides
+    if overrides and type(overrides.skin_id_to_mode) == "table" then
+        local merged = getMergedSkinDefinitionEntries()
+        if merged then
+            for _, entry in ipairs(merged) do
+                local mode_id = entry.id and overrides.skin_id_to_mode[entry.id]
+                if mode_id then
+                    ids[#ids + 1] = mode_id
+                end
+            end
+            if #ids > 0 then
+                return ids
+            end
+        end
+    end
+
+    local order = base.GetCustomFrameModesOrder and base:GetCustomFrameModesOrder()
+    if type(order) == "table" then
+        for _, mode_id in ipairs(order) do
+            local texture_data = getEpfTexture(base, mode_id)
+            if textureUsesCustomSkinsAsset(base, texture_data) then
+                ids[#ids + 1] = mode_id
+            end
+        end
         return ids
     end
 
-    -- Custom Skins registers modes in definition order; ReorderCustomFrameModes only changes menu order.
-    local maxStandard = base.MAX_LEVEL_TEXTURE_ID or 5
-    for modeId = maxStandard + 1, #frameModes do
-        local textureData = base:GetTexture(modeId)
-        if textureUsesCustomSkinsAsset(base, textureData) then
-            ids[#ids + 1] = modeId
+    -- Legacy EPF (< 1.11): numeric FRAME_MODES after the built-in standard slots.
+    local frame_modes = base.FRAME_MODES
+    if type(frame_modes) ~= "table" then
+        return ids
+    end
+    local max_standard = base.MAX_LEVEL_TEXTURE_ID or 5
+    for mode_id = max_standard + 1, #frame_modes do
+        local texture_data = getEpfTexture(base, mode_id)
+        if textureUsesCustomSkinsAsset(base, texture_data) then
+            ids[#ids + 1] = mode_id
         end
     end
     return ids
@@ -573,10 +689,24 @@ local function rebuildSkinCriteriaMap(base)
         return
     end
 
-    local customModeIds = collectCustomSkinsModeIdsByRegistration(base)
-    local pairCount = math.min(#merged, #customModeIds)
-    for index = 1, pairCount do
-        skinCriteriaByModeId[customModeIds[index]] = merged[index]
+    local overrides = _G.EPF_CustomSkins_Overrides
+    if overrides and type(overrides.skin_id_to_mode) == "table" then
+        for _, entry in ipairs(merged) do
+            local mode_id = entry.id and overrides.skin_id_to_mode[entry.id]
+            if mode_id then
+                skinCriteriaByModeId[mode_id] = entry
+            end
+        end
+        if next(skinCriteriaByModeId) then
+            skinCriteriaMapReady = true
+            return
+        end
+    end
+
+    local custom_mode_ids = collectCustomSkinsModeIdsByRegistration(base)
+    local pair_count = math.min(#merged, #custom_mode_ids)
+    for index = 1, pair_count do
+        skinCriteriaByModeId[custom_mode_ids[index]] = merged[index]
     end
 
     skinCriteriaMapReady = true
@@ -638,26 +768,28 @@ local function resolveTargetLevelFallbackTexture(base, targetInfo)
     local maxLevel = base.GetMaxLevelInfo and base:GetMaxLevelInfo()
     local expansion = base.GetExpansionInfo and base:GetExpansionInfo()
     local level = targetInfo and targetInfo.level
+    local normal = getEpfTexture(base, usesStringModeIds(base) and "normal" or 1)
 
     if not level or level < 0 then
-        return base:GetTexture(1)
+        return normal
     end
     if maxLevel and level >= maxLevel then
-        return base:GetTexture(MAX_LEVEL_TEXTURE_ID) or base:GetTexture(1)
+        return getEpfTexture(base, usesStringModeIds(base) and "gold-winged" or MAX_LEVEL_TEXTURE_ID) or normal
     end
     if level >= INTRO_MAX_LEVEL then
         if expansion and level >= expansion.minLevel then
-            return base:GetTexture(3) or base:GetTexture(1)
+            return getEpfTexture(base, usesStringModeIds(base) and "silver-winged" or 3) or normal
         end
-        return base:GetTexture(2) or base:GetTexture(1)
+        return getEpfTexture(base, usesStringModeIds(base) and "silver" or 2) or normal
     end
-    return base:GetTexture(1)
+    return normal
 end
 
 local function resolveTargetAutoTexture(base)
     local targetInfo = getTargetUnitInfo(base)
+    local fallback = getEpfTexture(base, usesStringModeIds(base) and "normal" or 1)
     if not targetInfo then
-        return base:GetTexture(1)
+        return fallback
     end
 
     ensureSkinCriteriaMap(base)
@@ -667,10 +799,10 @@ local function resolveTargetAutoTexture(base)
         for _, modeId in ipairs(order) do
             local entry = skinCriteriaByModeId[modeId]
             if entry and entryMatchesTarget(base, targetInfo, entry) then
-                return base:GetTexture(modeId)
+                return getEpfTexture(base, modeId)
             end
             if targetMatchesOverrideMode(base, targetInfo, modeId) then
-                return base:GetTexture(modeId)
+                return getEpfTexture(base, modeId)
             end
         end
     end
@@ -685,7 +817,7 @@ local function resolveTargetAutoTexture(base)
             if skinCriteriaByModeId[modeId] or isRegisteredOverrideModeId(modeId) then
                 -- Handled above (definition entries and target-based overrides).
             else
-                local textureData = base:GetTexture(modeId)
+                local textureData = getEpfTexture(base, modeId)
                 if textureData and type(textureData.autoCondition) == "function" then
                     if textureData.autoCondition(base) then
                         return textureData
@@ -719,21 +851,27 @@ end
 
 local function getActiveTexture(base)
     ensureSettings()
+    local string_ids = usesStringModeIds(base)
+    local disabled_id = string_ids and "disabled" or 0
+    local normal_id = string_ids and "normal" or 1
+
     if not settings.display or not shouldApplyToCurrentTarget() or (not settings.instances and IsInInstance()) then
-        return base:GetTexture(0)
+        return getEpfTexture(base, disabled_id) or getEpfTexture(base, normal_id)
     end
     if settings.syncFrameMode and type(base.GetCurrentTexture) == "function" then
         return base:GetCurrentTexture()
     end
 
-    local mode = settings.frameMode or 1
-    if mode == 0 then
-        return base:GetTexture(1)
+    local mode = resolveFrameModeId(settings.frameMode)
+    settings.frameMode = mode
+
+    if mode == "normal" or mode == 0 then
+        return getEpfTexture(base, normal_id)
     end
-    if mode == 1 then
+    if mode == "auto" or mode == 1 then
         return resolveTargetAutoTexture(base)
     end
-    return base:GetTexture(mode) or base:GetTexture(1)
+    return getEpfTexture(base, mode) or getEpfTexture(base, normal_id)
 end
 
 local function layerHasCustomAtlas(layerTexture)
@@ -812,14 +950,17 @@ local function registerBaseCallbacks(base)
     end, ADDON_NAME .. "_DisplayUpdated")
     base:RegisterCallback("TEXTURE_RESOLUTION_CHANGED", function()
         skinCriteriaMapReady = false
+        invalidateEpfTextureCache()
         requestUpdate()
     end, ADDON_NAME .. "_ResolutionChanged")
     base:RegisterCallback("CUSTOM_FRAME_MODE_ADDED", function()
         skinCriteriaMapReady = false
+        invalidateEpfTextureCache()
         requestUpdate()
     end, ADDON_NAME .. "_CustomFrameModeAdded")
     base:RegisterCallback("CUSTOM_FRAME_MODES_REORDERED", function()
         skinCriteriaMapReady = false
+        invalidateEpfTextureCache()
         requestUpdate()
     end, ADDON_NAME .. "_CustomFrameModesReordered")
     base:RegisterCallback("SETTING_CHANGED", function()
