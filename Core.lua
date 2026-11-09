@@ -400,6 +400,28 @@ local function getTargetUnitLevel()
     return level
 end
 
+-- GUID → last known specialization (avoids class-skin flash before INSPECT_READY / C_Traits).
+local target_spec_cache = {}
+local last_auto_texture = nil
+local last_auto_guid = nil
+
+local function get_unit_guid(unit)
+    if not UnitExists(unit) then
+        return nil
+    end
+    local ok, guid = pcall(UnitGUID, unit)
+    if ok and type(guid) == "string" and guid ~= "" then
+        return guid
+    end
+    return nil
+end
+
+local function cache_target_spec(guid, specialization)
+    if guid and specialization ~= nil and specialization ~= 0 then
+        target_spec_cache[guid] = specialization
+    end
+end
+
 local function getTargetUnitInfo(base)
     if not UnitExists("target") then
         return nil
@@ -411,19 +433,53 @@ local function getTargetUnitInfo(base)
     info.faction = UnitFactionGroup("target")
     info.sex = UnitSex("target")
     info.race = select(3, UnitRace("target"))
+    info.guid = get_unit_guid("target")
+    info.isPlayer = UnitIsPlayer("target") and true or false
+    info.specPending = false
 
     local _, classFile, classId = UnitClass("target")
+    info.classFile = classFile
     if classId then
         info.class = classId
     elseif classFile then
         info.class = resolveClassId(base, classFile)
     end
 
-    if UnitIsPlayer("target") then
-        if UnitIsUnit("target", "player") and PlayerUtil and PlayerUtil.GetCurrentSpecID then
+    if info.isPlayer then
+        local SC = EliteTargetFrame_SpecCompat
+        local trait_points
+        if SC and type(SC.GetDominantTreeIndex) == "function" then
+            local _, points = SC.GetDominantTreeIndex("target")
+            trait_points = points
+        end
+        if SC and type(SC.ResolveUnitSpecialization) == "function" then
+            info.specialization = SC.ResolveUnitSpecialization(base, "target")
+        elseif UnitIsUnit("target", "player") and PlayerUtil and PlayerUtil.GetCurrentSpecID then
             info.specialization = PlayerUtil.GetCurrentSpecID()
         elseif GetInspectSpecialization then
             info.specialization = GetInspectSpecialization("target")
+        end
+
+        if (info.specialization == nil or info.specialization == 0) and info.guid then
+            info.specialization = target_spec_cache[info.guid]
+        end
+
+        if info.specialization ~= nil and info.specialization ~= 0 then
+            cache_target_spec(info.guid, info.specialization)
+        elseif not UnitIsUnit("target", "player") then
+            -- Confirmed 0 talent points → allow class-base skins (not pending).
+            local total = 0
+            if type(trait_points) == "table" then
+                for _, spent in ipairs(trait_points) do
+                    total = total + (tonumber(spent) or 0)
+                end
+            end
+            if type(trait_points) == "table" and total == 0 then
+                info.specPending = false
+            else
+                -- Inspect / Forever trait data may not be ready yet.
+                info.specPending = true
+            end
         end
     end
 
@@ -460,6 +516,10 @@ end
 local function targetMatchesSpec(base, targetInfo, value)
     if not targetInfo or not targetInfo.specialization then
         return false
+    end
+    local SC = EliteTargetFrame_SpecCompat
+    if SC and type(SC.SpecsMatch) == "function" then
+        return SC.SpecsMatch(base, targetInfo.specialization, value, targetInfo.class)
     end
     local wantId = resolveSpecId(base, value)
     return wantId ~= nil and targetInfo.specialization == wantId
@@ -585,6 +645,11 @@ local function entryMatchesTarget(base, targetInfo, entry)
         return false
     end
     if entry.class and not targetMatchesClass(base, targetInfo, entry.class) then
+        return false
+    end
+    -- While inspect/traits are pending, skip class-only skins so we don't flash
+    -- class → spec when INSPECT_READY arrives a moment later.
+    if targetInfo.specPending and not entry.spec then
         return false
     end
     if entry.spec and not targetMatchesSpec(base, targetInfo, entry.spec) then
@@ -789,54 +854,74 @@ local function resolveTargetAutoTexture(base)
     local targetInfo = getTargetUnitInfo(base)
     local fallback = getEpfTexture(base, usesStringModeIds(base) and "normal" or 1)
     if not targetInfo then
+        last_auto_guid = nil
+        last_auto_texture = nil
         return fallback
+    end
+
+    -- Spec not ready yet: keep the previous skin for this GUID (no class-skin flash).
+    if targetInfo.specPending and targetInfo.guid and targetInfo.guid == last_auto_guid and last_auto_texture then
+        return last_auto_texture
     end
 
     ensureSkinCriteriaMap(base)
 
+    local matchedTexture
     local order = base.GetCustomFrameModesOrder and base:GetCustomFrameModesOrder()
     if type(order) == "table" then
         for _, modeId in ipairs(order) do
             local entry = skinCriteriaByModeId[modeId]
             if entry and entryMatchesTarget(base, targetInfo, entry) then
-                return getEpfTexture(base, modeId)
+                matchedTexture = getEpfTexture(base, modeId)
+                break
             end
             if targetMatchesOverrideMode(base, targetInfo, modeId) then
-                return getEpfTexture(base, modeId)
+                matchedTexture = getEpfTexture(base, modeId)
+                break
             end
         end
     end
 
-    applyTargetEvalFramePatches(base, targetInfo)
-    local matchedTexture
-    local ok, result = pcall(function()
-        if type(order) ~= "table" then
-            return nil
-        end
-        for _, modeId in ipairs(order) do
-            if skinCriteriaByModeId[modeId] or isRegisteredOverrideModeId(modeId) then
-                -- Handled above (definition entries and target-based overrides).
-            else
-                local textureData = getEpfTexture(base, modeId)
-                if textureData and type(textureData.autoCondition) == "function" then
-                    if textureData.autoCondition(base) then
-                        return textureData
+    if not matchedTexture and not targetInfo.specPending then
+        applyTargetEvalFramePatches(base, targetInfo)
+        local ok, result = pcall(function()
+            if type(order) ~= "table" then
+                return nil
+            end
+            for _, modeId in ipairs(order) do
+                if skinCriteriaByModeId[modeId] or isRegisteredOverrideModeId(modeId) then
+                    -- Handled above (definition entries and target-based overrides).
+                else
+                    local textureData = getEpfTexture(base, modeId)
+                    if textureData and type(textureData.autoCondition) == "function" then
+                        if textureData.autoCondition(base) then
+                            return textureData
+                        end
                     end
                 end
             end
+            return nil
+        end)
+        clearTargetEvalFramePatches()
+        if ok and result then
+            matchedTexture = result
         end
-        return nil
-    end)
-    clearTargetEvalFramePatches()
-    if ok and result then
-        matchedTexture = result
     end
 
     if matchedTexture then
+        last_auto_guid = targetInfo.guid
+        last_auto_texture = matchedTexture
         return matchedTexture
     end
 
-    return resolveTargetLevelFallbackTexture(base, targetInfo)
+    if targetInfo.specPending and last_auto_guid == targetInfo.guid and last_auto_texture then
+        return last_auto_texture
+    end
+
+    local level_fallback = resolveTargetLevelFallbackTexture(base, targetInfo)
+    last_auto_guid = targetInfo.guid
+    last_auto_texture = level_fallback
+    return level_fallback
 end
 
 local function shouldApplyToCurrentTarget()
