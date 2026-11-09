@@ -4,6 +4,17 @@ All notable changes to **Elite Target Frame** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-11-09
+
+### Added
+
+- Camelot (`*_Camelot.toc`, Interface 16001) load support for WoW Forever.
+
+### Fixed
+
+- Auto target skins on Forever: resolve specialization via EPF `GetCurrentSpecID` (trait group points) and map retail texture-def spec IDs to Forever group IDs.
+- Target auto skin no longer flashes class → spec while inspect / Forever trait data is still loading (cache by GUID; skip class-only fallbacks until spec is known).
+
 ## [1.1.0] - 2026-11-09
 
 ### Changed
