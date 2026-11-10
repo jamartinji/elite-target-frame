@@ -4,6 +4,13 @@ All notable changes to **Elite Target Frame** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-11-10
+
+### Fixed
+
+- Live retail loads again: `Interface` lists 120105 (12.1.5) as well as 120107. Listing only the newer interface made the addon incompatible with the current retail client.
+- Read target textures from `GetTextures()` on each update. Elite Player Frame (Enhanced) 1.11.7 no longer exposes the live texture table through `CopyTable`.
+
 ## [1.2.1] - 2026-11-10
 
 ### Fixed
