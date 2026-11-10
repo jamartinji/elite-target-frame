@@ -77,9 +77,8 @@ local function usesStringModeIds(base)
 end
 
 --[[
- * EPF 1.11+ keys TEXTURES by string id; public GetTexture() still only accepts numbers.
- * Prefer Custom Skins' live core capture when available; otherwise GetTextures() copy
- * (deep copy keeps autoCondition function refs and atlas tables usable for painting).
+ * EPF 1.11.7 returns a deep copy from GetTextures(). Refresh that copy on each target
+ * update so override edits made through the shared atlas tables are visible.
 --]]
 local cached_textures
 local cached_textures_base
@@ -87,13 +86,6 @@ local cached_textures_base
 local function getEpfTextures(base)
     if not base then
         return nil
-    end
-    local overrides = _G.EPF_CustomSkins_Overrides
-    if overrides and type(overrides.GetEpfCore) == "function" then
-        local core = overrides.GetEpfCore()
-        if core and type(core.TEXTURES) == "table" then
-            return core.TEXTURES
-        end
     end
     if cached_textures and cached_textures_base == base then
         return cached_textures
@@ -974,6 +966,7 @@ local function hideTargetOverlays()
 end
 
 local function updateTargetTexture()
+    invalidateEpfTextureCache()
     local base = getBaseAddon()
     if not isBaseReady(base) then return false end
     ensureSettings()
